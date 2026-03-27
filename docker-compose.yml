@@ -1,0 +1,17 @@
+services:
+  transcribe:
+    build: .
+    container_name: transcribe
+    volumes:
+      # Map a local folder to /audio inside the container
+      # Place your audio/video files in ./audio/ on the host
+      - ./audio:/audio
+    environment:
+      # Optional: set your Hugging Face token here for speaker diarization
+      # Get one at https://huggingface.co/settings/tokens
+      HF_TOKEN: ${HF_TOKEN:-}
+    # No default command — pass args via: docker compose run transcribe <args>
+    # Examples:
+    #   docker compose run transcribe /audio/meeting.mp3
+    #   docker compose run transcribe /audio/meeting.mp4 --speakers --srt
+    #   docker compose run transcribe /audio/meeting.mp4 --speakers --num-speakers 2 --hf-token $HF_TOKEN

@@ -52,6 +52,27 @@ warnings.filterwarnings("ignore", category=UserWarning)
 # Dependency checks
 # ---------------------------------------------------------------------------
 
+def get_device():
+    """
+    Detect the best available compute device.
+
+    Priority: CUDA (NVIDIA) > DirectML (AMD/Intel on Windows) > CPU
+    DirectML requires: pip install torch-directml
+    """
+    import torch
+    if torch.cuda.is_available():
+        return "cuda", torch.device("cuda")
+
+    try:
+        import torch_directml
+        dml = torch_directml.device()
+        return "directml", dml
+    except ImportError:
+        pass
+
+    return "cpu", torch.device("cpu")
+
+
 def check_dependencies(need_speakers=False):
     """Check and report missing dependencies."""
     missing = []
@@ -156,16 +177,21 @@ def transcribe(
     import whisper
     import torch
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    if device == "cuda":
-        print(f"🚀 Using GPU: {torch.cuda.get_device_name(0)}")
+    device_name, device = get_device()
+    if device_name == "cuda":
+        print(f"🚀 Using NVIDIA GPU: {torch.cuda.get_device_name(0)}")
+    elif device_name == "directml":
+        print("🚀 Using AMD/Intel GPU via DirectML")
     else:
         print("💻 Using CPU (transcription will be slower)")
         if model_name in ("large-v3", "large", "medium"):
             print(f"   ⚠️  '{model_name}' is slow on CPU. Consider 'base' or 'small'.")
 
     print(f"📦 Loading Whisper model: {model_name}...")
-    model = whisper.load_model(model_name, device=device)
+    # Load on CPU first, then move to device (required for DirectML)
+    model = whisper.load_model(model_name, device="cpu")
+    if device_name != "cpu":
+        model = model.to(device)
 
     print(f"🔊 Transcribing: {audio_path}...")
     t0 = time.time()
@@ -175,7 +201,7 @@ def transcribe(
         language=language,
         verbose=verbose,
         word_timestamps=timestamps,
-        fp16=(device == "cuda"),
+        fp16=(device_name == "cuda"),  # fp16 only supported on CUDA
     )
 
     print(f"✅ Transcription done in {time.time() - t0:.1f}s\n")
@@ -220,10 +246,12 @@ def diarize(audio_path: str, hf_token: str = None, num_speakers: int = None) -> 
             sys.exit(1)
         raise
 
-    # Use GPU if available
+    # pyannote only supports CUDA or CPU (not DirectML)
     import torch
     if torch.cuda.is_available():
         pipeline = pipeline.to(torch.device("cuda"))
+    else:
+        print("   ℹ️  Speaker diarization running on CPU (DirectML not supported by pyannote)")
 
     print(f"🔍 Identifying speakers in: {audio_path}...")
     t0 = time.time()

@@ -11,12 +11,25 @@ A command-line speech-to-text tool that transcribes audio/video files using **Op
 - **SRT subtitle output** — ready for Premiere Pro, DaVinci Resolve, etc.
 - **Microphone recording** — record directly from your mic and transcribe live
 - Five Whisper model sizes to balance speed vs accuracy
-- GPU acceleration (CUDA) automatically used when available
+- GPU acceleration — NVIDIA (CUDA), AMD/Intel on Windows (DirectML), or CPU fallback
 
 ---
 
 ## Requirements
 
+### NVIDIA GPU (CUDA)
+```bash
+pip install openai-whisper torch pyannote.audio sounddevice soundfile numpy
+```
+
+### AMD / Intel GPU on Windows (DirectML)
+```bash
+pip install openai-whisper torch pyannote.audio sounddevice soundfile numpy torch-directml
+```
+The script auto-detects DirectML when `torch-directml` is installed. No other changes needed.
+> **Note:** Speaker diarization (`--speakers`) always runs on CPU when using DirectML — pyannote does not support it.
+
+### CPU only
 ```bash
 pip install openai-whisper torch pyannote.audio sounddevice soundfile numpy
 ```
@@ -97,6 +110,41 @@ python transcribe.py --record --duration 60 --speakers --srt
 | `large-v3` | 1550M | Best available (slow on CPU) |
 
 > **Tip:** On CPU, stick to `base` or `small`. Use `large-v3` if you have a GPU.
+
+---
+
+## Running in Docker (CPU)
+
+Docker runs CPU-only (AMD GPU passthrough is not supported on Windows Docker).
+
+### Setup
+
+```bash
+# Create a folder for your audio files
+mkdir audio
+
+# Copy your files in
+cp meeting.mp4 audio/
+```
+
+### Build & Run
+
+```bash
+docker compose build
+
+# Basic transcription
+docker compose run transcribe /audio/meeting.mp3
+
+# With speaker labels and SRT output
+docker compose run transcribe /audio/meeting.mp4 --speakers --srt
+
+# With Hugging Face token for diarization
+docker compose run transcribe /audio/meeting.mp4 --speakers --hf-token YOUR_TOKEN --srt
+```
+
+Output files (`.srt`, `.txt`) are saved inside `/audio/` in the container, which maps back to your local `./audio/` folder.
+
+> **Note:** The `--record` (microphone) flag does not work inside Docker.
 
 ---
 
